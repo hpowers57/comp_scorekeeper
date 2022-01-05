@@ -4,12 +4,18 @@
 ## Possible Features:
 #### Scoring
 - keep heat lists for each round
-- add multiple unique scorecards to track scoring and placing
+- offer different scorecards to track callbacks and placing
+- add multiple scorecards per round for each judge
 - *for callbacks*: output numbers from most to least callbacks
 - *for callbacks*: show total count of dancers at each callback level to determine future round size
-- *for placing*: see YCN rules for feasibility
+- *for placing*: see skating system rules for feasibility
+- *for placing*: display calculation table for placements of each couple
 - linked dances must have combined callbacks
+- look to O2CM for how to display callbacks and placing
 #### Saving
-- allow user to name by round/dance/level/style/etc
+- allow user to name rounds by round/dance/level/style/etc
 - backup results to handle crashes
 - save callback and placing results with appropriate labelling
+- allow reload of previously saved results in case of error
+#### Testing
+- use previous O2CM results to confirm program function
