@@ -1,6 +1,7 @@
 # RPI Ballroom Competition Scorekeeper
 ### Language: Python
 #### UI Package: PyQt5
+##### Files: gui.py, scorecard.py
 ## Features:
 #### Scoring
 - different scorecards to track callbacks and placing
