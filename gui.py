@@ -1,4 +1,10 @@
+"""
+Comp Scorekeeper by Hannah Powers and Mercedez Young
+Last updated: 4/6/2022 at 9:15pm
+"""
+
 import os.path
+import sys
 import traceback
 
 import numpy as np
@@ -9,6 +15,215 @@ from PyQt5.QtGui import QPixmap
 from PyQt5 import QtCore, QtGui
 from scorecard import *
 import json
+
+
+class multiDancePlacing(QWidget):
+    def __init__(self, main):
+        super().__init__()
+        self.main = main
+        self.placements_list = dict()
+        self.overall = MultiPlaces()
+        self.windows = list()
+
+        layoutRight = QVBoxLayout()
+        instr = QLabel()
+        instr.setText("Add some placements and an event number!")
+        event = QHBoxLayout()
+        event_no_label = QLabel()
+        event_no_label.setText("Event number:")
+        self.event_no = QSpinBox()
+        self.event_no.setValue(0)
+        self.event_no.setRange(0, 500)
+        self.event_no.setFixedWidth(100)
+        event.addWidget(event_no_label)
+        event.addWidget(self.event_no)
+        calculate = QPushButton("Calculate")
+        calculate.clicked.connect(self.calculatePlacements)
+        cancel = QPushButton("Cancel")
+        cancel.setFixedWidth(100)
+        cancel.clicked.connect(self.close)
+        # save = QPushButton("Save round")
+        # save.clicked.connect(self.savePlacements)
+        miniLayout1 = QHBoxLayout()
+        miniLayout1.addWidget(cancel)
+        miniLayout1.addWidget(calculate)
+        layoutRight.addWidget(instr)
+        layoutRight.addLayout(event)
+        layoutRight.addWidget(QLabel())
+        layoutRight.addLayout(miniLayout1)
+
+        layoutLeft = QVBoxLayout()
+        add = QPushButton("Add placements")
+        add.clicked.connect(self.addPlacements)
+        clear = QPushButton("Clear")
+        clear.clicked.connect(self.clearPlacements)
+        delete = QPushButton("Delete")
+        delete.clicked.connect(self.deletePlacement)
+        miniLayout = QHBoxLayout()
+        miniLayout.addWidget(clear)
+        miniLayout.addWidget(delete)
+        self.placements = QListWidget()
+        self.placements.itemDoubleClicked.connect(self.reopenPlacement)
+        layoutLeft.addWidget(add)
+        layoutLeft.addWidget(self.placements)
+        layoutLeft.addLayout(miniLayout)
+
+        layout = QHBoxLayout()
+        layout.addLayout(layoutLeft)
+        layout.addLayout(layoutRight)
+        self.setLayout(layout)
+        self.setWindowTitle("Comp Scorekeeper")
+        self.setMinimumSize(500, 500)
+
+    def calculatePlacements(self):
+        scores = self.overall.return_places()
+        if scores is None:
+            alert = QMessageBox()
+            alert.setText("Not enough placements! You must have at least one.")
+            alert.exec_()
+        else:
+            window = multiResultsWindow(self, scores, str(self.event_no.value()))
+            self.windows.append(window)
+            window.show()
+
+    def addPlacements(self):
+        event_no = str(self.event_no.value())
+
+        if event_no == 0:
+            alert = QMessageBox()
+            alert.setText("Please add the event number before starting a scoresheet!")
+            alert.exec_()
+        else:
+            window = PlacementWindow(self, event_no)
+            self.windows.append(window)
+            window.show()
+
+    def clearPlacements(self):
+        self.overall.clear()
+        self.placements_list.clear()
+        self.placements.clear()
+
+    def deletePlacement(self):
+        try:
+            sel = self.placements.selectedItems()
+            for s in sel:
+                self.placements_list.pop(s.text())
+                self.overall.remove_places(s.text())
+                idx = self.placements.indexFromItem(s).row()
+                self.placements.takeItem(idx)
+        except Exception:
+            print(traceback.format_exc())
+
+    def reopenPlacement(self, item: QListWidgetItem):
+        window = PlacementWindow(self, self.event_no.value())
+        window.addDance(item.text())
+        window.addScores(self.placements_list[item.text()][0])
+        self.windows.append(window)
+        window.show()
+
+    def savePlacement(self, dance, places, event_no, placement):
+        def helper():
+            ret = self.overall.add_places(dance, places)
+            if not ret:
+                alert = QMessageBox()
+                alert.setText("Looks like you've added a new couple! Check your placements to make sure the numbers are correct.")
+                alert.exec_()
+            else:
+                item = QListWidgetItem(dance)
+                match = self.placements.findItems(dance, QtCore.Qt.MatchExactly)
+                if len(match) != 0:
+                    for m in match:
+                        idx = self.placements.indexFromItem(m).row()
+                        self.placements.takeItem(idx)
+                self.placements.addItem(item)
+                self.placements_list[dance] = (places, (dance, event_no))
+                placement.close()
+
+        if str(event_no) != str(self.event_no.value()):
+            alert = QMessageBox()
+            alert.setText("Event number does not match event's. What would you like to do?")
+            alert.addButton("Save anyway", QMessageBox.YesRole)
+            alert.addButton("Delete placements", QMessageBox.NoRole)
+            ret = alert.exec_()
+            if ret == 0:
+                helper()
+                placement.close()
+            else:
+                placement.close()
+        else:
+            helper()
+
+    def closeEvent(self, event):
+        start = time()
+        while len(self.windows) > 0:
+            self.windows[0].close()
+            if time() - start > 2:
+                break
+
+        self.main.windows.remove(self)
+        super().closeEvent(event)
+
+
+class multiResultsWindow(QWidget):
+    def __init__(self, main, results, event_no):
+        super().__init__()
+        self.main = main
+        self.event_no = event_no
+        self.results, self.dances = results
+        title = QLabel("Places for multi-dance event #{}".format(event_no))
+        title.setStyleSheet("font-weight: bold")
+
+        n = self.results.shape[0]
+        cols = ["Couple"] + self.dances + ["Total", "Result"]
+        self.pretty = self.results[cols].sort_values(by="Total")
+
+        self.places = QTableWidget(self.pretty.shape[0], self.pretty.shape[1])
+        cols = list(self.pretty.columns)
+        self.places.setHorizontalHeaderLabels(cols)
+        self.places.setColumnWidth(0, 70)
+        self.places.setColumnWidth(self.pretty.shape[1] - 1, 50)
+        for i in range(1, len(self.dances) + 1):
+            self.places.setColumnWidth(i, 50)
+        for i in range(len(self.dances) + 1, self.pretty.shape[1] - 1):
+            self.places.setColumnWidth(i, 70)
+        for i in range(self.pretty.shape[0]):
+            for j in range(self.pretty.shape[1]):
+                itm = QTableWidgetItem(str(self.pretty[cols[j]].values[i]))
+                itm.setForeground(QtGui.QBrush(QtGui.QColor(0, 0, 0)))
+                itm.setFlags(QtCore.Qt.ItemIsEditable)
+                self.places.setItem(i, j, itm)
+
+        blank = QLabel()
+        save = QPushButton()
+        save.setText("Save")
+        save.setFixedWidth(100)
+        save.clicked.connect(self.savePlaces)
+
+        layout = QVBoxLayout()
+        layout.addWidget(title)
+        layout.addWidget(self.places)
+        layout2 = QHBoxLayout()
+        layout2.addWidget(blank)
+        layout2.addWidget(save)
+        layout.addLayout(layout2)
+
+        self.setLayout(layout)
+        self.setWindowTitle("Comp Scorekeeper")
+        self.setMinimumSize(800, 410)
+
+    def savePlaces(self):
+        title = "saved/event{}_{}_{}_places.txt".format(self.event_no, "_".join(self.dances), "Final")
+        with open(title, "w") as f:
+            dfAsString = self.pretty.to_string(header=True, index=False)
+            f.write(dfAsString)
+        if os.path.isfile(title):
+            alert = QMessageBox()
+            alert.setText("Placements saved! You can safely close the window now.")
+            alert.exec_()
+
+    def closeEvent(self, event):
+        self.main.windows.remove(self)
+        super().closeEvent(event)
 
 
 class placingResultsWindow(QWidget):
@@ -24,19 +239,17 @@ class placingResultsWindow(QWidget):
                                                             round if round_word else round + str(" Round")))
         title.setStyleSheet("font-weight: bold")
 
-        n = 10 - np.count_nonzero(pd.isna(self.results["Couple"]))
-        self.pretty = self.results.sort_values(by=self.judges[0])
+        n = self.results.shape[0]
+        self.pretty = self.results.sort_values(by="Place")
         self.pretty["Place"] = self.pretty["Place"].astype(str)
         for i in range(1, n + 1):
             self.pretty["1-" + str(i)] = self.pretty["1-" + str(i)].astype(int).astype(str) + "(" + self.pretty["1-" + str(i) + "SUM"].astype(
                 int).astype(str) + ")"
             self.pretty.loc[self.pretty["1-" + str(i)] == "0(0)", "1-" + str(i)] = ""
-        for i in range(1, n + 1):
-            self.pretty.loc[self.pretty["Place"] == str(i), ["1-" + str(j) for j in range(i + 1, n + 1)]] = ""
-        drop = [[str(i) + "_", "1-" + str(i), "1-" + str(i) + "SUM"] for i in range(n + 1, 11)]
-        drop = [elmt for sublst in drop for elmt in sublst] + [str(i) + "_" for i in range(1, n + 1)] + [
-            "1-" + str(i) + "SUM" for i in range(1, n + 1)]
-        self.pretty = self.pretty.loc[pd.isna(self.pretty["Couple"]) != True].drop(drop, axis=1)
+        # for i in range(1, n + 1):
+        #     self.pretty.loc[self.pretty["Place"] == str(i), ["1-" + str(j) for j in range(i + 1, n + 1)]] = ""
+        drop = [str(i) + "_" for i in range(1, n + 1)] + ["1-" + str(i) + "SUM" for i in range(1, n + 1)]
+        self.pretty = self.pretty.drop(drop, axis=1)
 
         self.places = QTableWidget(self.pretty.shape[0], self.pretty.shape[1])
         cols = list(self.pretty.columns)
@@ -54,13 +267,33 @@ class placingResultsWindow(QWidget):
                 itm.setFlags(QtCore.Qt.ItemIsEditable)
                 self.places.setItem(i, j, itm)
 
+        blank = QLabel()
+        save = QPushButton()
+        save.setText("Save")
+        save.setFixedWidth(100)
+        save.clicked.connect(self.savePlaces)
+
         layout = QVBoxLayout()
         layout.addWidget(title)
         layout.addWidget(self.places)
+        layout2 = QHBoxLayout()
+        layout2.addWidget(blank)
+        layout2.addWidget(save)
+        layout.addLayout(layout2)
 
         self.setLayout(layout)
         self.setWindowTitle("Comp Scorekeeper")
         self.setMinimumSize(800, 410)
+
+    def savePlaces(self):
+        title = "saved/event{}_{}_{}_places.txt".format(self.event_no, self.dance, self.round)
+        with open(title, "w") as f:
+            dfAsString = self.pretty.to_string(header=True, index=False)
+            f.write(dfAsString)
+        if os.path.isfile(title):
+            alert = QMessageBox()
+            alert.setText("Placements saved! You can safely close the window now.")
+            alert.exec_()
 
     def closeEvent(self, event):
         self.main.windows.remove(self)
@@ -78,8 +311,9 @@ class callbacksResultsWindow(QWidget):
         self.n = len(self.results)
         m = 1 + len(self.judges)
         round_word = round == "QF" or round == "SF" or round == "Final"
-        title = QLabel("Places for event #{}: {} {}".format(event_no, dance,
+        title = QLabel("Callbacks for event #{}: {} {}".format(event_no, dance,
                                                             round if round_word else round + str(" Round")))
+        title.setStyleSheet("font-weight: bold")
 
         num_label = QLabel("Please select a number of callbacks needed:")
         self.num = QSpinBox()
@@ -124,6 +358,12 @@ class callbacksResultsWindow(QWidget):
                         itm.setBackground(QtGui.QColor(200, 200, 200))
                     self.callbacks.setItem(i, j, itm)
 
+        blank = QLabel()
+        save = QPushButton()
+        save.setText("Save")
+        save.setFixedWidth(100)
+        save.clicked.connect(self.saveCallbacks)
+
         layout = QVBoxLayout()
         layout.addWidget(title)
         layout2 = QHBoxLayout()
@@ -135,6 +375,10 @@ class callbacksResultsWindow(QWidget):
         layout3.addWidget(self.num_called)
         layout.addLayout(layout3)
         layout.addWidget(self.callbacks)
+        layout4 = QHBoxLayout()
+        layout4.addWidget(blank)
+        layout4.addWidget(save)
+        layout.addLayout(layout4)
 
         self.setLayout(layout)
         self.setWindowTitle("Comp Scorekeeper")
@@ -149,6 +393,23 @@ class callbacksResultsWindow(QWidget):
                     self.callbacks.item(i, j).setBackground(QtGui.QColor(200, 200, 200))
                 else:
                     self.callbacks.item(i, j).setBackground(QtGui.QColor(255, 255, 255))
+
+    def saveCallbacks(self):
+        cols = ["Couple"] + self.judges + ["Total", "Recall"]
+        callbacks = pd.DataFrame(columns=cols, index=range(self.n))
+        callbacks["Couple"] = [couple for couple, _ in self.results]
+        callbacks["Total"] = [len(a) for _, a in self.results]
+        callbacks["Recall"] = ["R" if len(a) >= self.num.value() else "" for _, a in self.results]
+        for i in range(len(self.judges)):
+            callbacks[self.judges[i]] = ["X" if self.judges[i] in a else "" for _, a in self.results]
+        title = "saved/event{}_{}_{}_callbacks.txt".format(self.event_no, self.dance, self.round)
+        with open(title, "w") as f:
+            dfAsString = callbacks.to_string(header=True, index=False)
+            f.write(dfAsString)
+        if os.path.isfile(title):
+            alert = QMessageBox()
+            alert.setText("Callbacks saved! You can safely close the window now.")
+            alert.exec_()
 
     def closeEvent(self, event):
         self.main.windows.remove(self)
@@ -271,8 +532,8 @@ class PlacingWindow(QWidget):
         self.judge.setText(judge)
 
     def addScores(self, places):
-        for i in range(max(places.keys())):
-            self.places.setItem(i, 0, QTableWidgetItem(places[i + 1]))
+        for k in places.keys():
+            self.places.setItem(places[k] - 1, 0, QTableWidgetItem(k))
 
     def onSave(self):
         judge = self.judge.text()
@@ -289,6 +550,91 @@ class PlacingWindow(QWidget):
             alert = QMessageBox()
             alert.setText("Please add valid judge number and some callbacks!")
             alert.exec_()
+
+    def closeEvent(self, event=None):
+        self.main.windows.remove(self)
+        super().closeEvent(event)
+
+
+class PlacementWindow(QWidget):
+    def __init__(self, main, event_no):
+        super().__init__()
+        self.main = main
+        self.event_no = event_no
+
+        layout = QVBoxLayout()
+        title = QLabel("Places for event #{}".format(event_no))
+        title.setStyleSheet("font-weight: bold")
+        layout2 = QHBoxLayout()
+        dance_label = QLabel("Dance")
+        dance_label.setStyleSheet("font-weight: bold")
+        self.dance = QComboBox()
+        self.dance.addItem("")
+        self.dance.addItem("Waltz")
+        self.dance.addItem("Tango")
+        self.dance.addItem("Foxtrot")
+        self.dance.addItem("V Waltz")
+        self.dance.addItem("Quickstep")
+        self.dance.addItem("Peabody")
+        self.dance.addItem("Cha Cha")
+        self.dance.addItem("Rumba")
+        self.dance.addItem("Swing")
+        self.dance.addItem("Mambo")
+        self.dance.addItem("Bolero")
+        self.dance.addItem("Samba")
+        self.dance.addItem("Jive")
+        self.dance.addItem("Paso Doble")
+        self.dance.setFixedWidth(100)
+        layout2.addWidget(dance_label)
+        layout2.addWidget(self.dance)
+        placing_label = QLabel("Places:")
+        placing_label.setStyleSheet("font-weight: bold")
+        self.places = QTableWidget(8, 1)
+        for i in range(8):
+            self.places.setItem(i, 0, QTableWidgetItem(''))
+        self.places.setHorizontalHeaderLabels(["Couple"])
+        layout3 = QHBoxLayout()
+        cancel = QPushButton("Cancel.")
+        cancel.clicked.connect(self.close)
+        save = QPushButton("Save.")
+        save.clicked.connect(self.onSave)
+        layout3.addWidget(cancel)
+        layout3.addWidget(save)
+        layout.addWidget(title)
+        layout.addLayout(layout2)
+        layout.addWidget(placing_label)
+        layout.addWidget(self.places)
+        layout.addLayout(layout3)
+
+        self.setLayout(layout)
+        self.setWindowTitle("Comp Scorekeeper")
+        self.setMinimumSize(350, 500)
+
+    def addDance(self, dance):
+        self.dance.setCurrentText(dance)
+
+    def addScores(self, places):
+        for k in places.keys():
+            self.places.setItem(places[k] - 1, 0, QTableWidgetItem(k))
+
+    def onSave(self):
+        try:
+            dance = self.dance.currentText()
+            places = dict()
+            j = 1
+            for i in range(10):
+                tmp = self.places.item(i, 0)
+                if tmp is not None and tmp.text() != '' and tmp.text().isnumeric():
+                    places[tmp.text()] = j
+                    j += 1
+            if dance != "" and len(places.keys()) > 0:
+                self.main.savePlacement(dance, places, self.event_no, self)
+            else:
+                alert = QMessageBox()
+                alert.setText("Please add valid dance and some places!")
+                alert.exec_()
+        except Exception:
+            print(traceback.format_exc())
 
     def closeEvent(self, event=None):
         self.main.windows.remove(self)
@@ -511,16 +857,19 @@ class RoundWindow(QWidget):
             helper()
 
     def reopenScoresheet(self, item: QListWidgetItem):
-        judge = item.text().split()[1]
-        scores, event_info = self.scoresheets_list[judge]
-        if self.round.currentText() == "Final":
-            window = PlacingWindow(self, event_info[0], event_info[1], event_info[2])
-        else:
-            window = CallbacksWindow(self, event_info[0], event_info[1], event_info[2])
-        window.addScores(scores)
-        window.addJudge(judge)
-        self.windows.append(window)
-        window.show()
+        try:
+            judge = item.text().split()[1]
+            scores, event_info = self.scoresheets_list[judge]
+            if self.round.currentText() == "Final":
+                window = PlacingWindow(self, event_info[0], event_info[1], event_info[2])
+            else:
+                window = CallbacksWindow(self, event_info[0], event_info[1], event_info[2])
+            window.addScores(scores)
+            window.addJudge(judge)
+            self.windows.append(window)
+            window.show()
+        except Exception:
+            print(traceback.format_exc())
 
     def addScoresheet(self):
         event_no = str(self.event_no.value())
@@ -579,12 +928,15 @@ class MainWindow(QMainWindow):
         logo.setPixmap(QPixmap("ballroom_logo_thumb.png"))
         logo.setAlignment(QtCore.Qt.AlignCenter)
         label = QLabel("Welcome to Comp Scorekeeper! Create a new round to get started.")
-        button = QPushButton("Create new round.")
+        button = QPushButton("Create new round")
         button.clicked.connect(self.on_new_round_clicked)
+        button2 = QPushButton("Total placements for multi-dance")
+        button2.clicked.connect(self.on_total_placements)
 
         layout.addWidget(logo)
         layout.addWidget(label)
         layout.addWidget(button)
+        layout.addWidget(button2)
         widget.setLayout(layout)
 
         self.setCentralWidget(widget)
@@ -592,10 +944,15 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(500, 500)
 
     def on_new_round_clicked(self):
+        round = RoundWindow(self)
+        self.windows.append(round)
+        round.show()
+
+    def on_total_placements(self):
         try:
-            round = RoundWindow(self)
-            self.windows.append(round)
-            round.show()
+            multi = multiDancePlacing(self)
+            self.windows.append(multi)
+            multi.show()
         except Exception:
             print(traceback.format_exc())
 
