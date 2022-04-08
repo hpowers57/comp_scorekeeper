@@ -1,3 +1,8 @@
+"""
+Comp Scorekeeper by Hannah Powers and Mercedez Young
+Last updated: 4/6/2022 at 9:15pm
+"""
+
 import numpy as np
 import pandas as pd
 
@@ -37,6 +42,9 @@ class Callbacks:
             self.judges.remove(judge)
             self.callbackcards.pop(judge)
             self.overall = None
+        print(self.judges)
+        print(self.callbackcards)
+        print(self.overall)
 
     def total_callbacks(self):
         """
@@ -60,10 +68,9 @@ class Callbacks:
         return sorted(self.overall.items(), key=lambda x: (len(x[1]), x[0]), reverse=True), self.judges
 
     def clear(self):
-        for judge in self.judges:
-            self.judges.remove(judge)
-            self.callbackcards.pop(judge)
-            self.overall = None
+        self.judges.clear()
+        self.callbackcards.clear()
+        self.overall = None
 
 
 class CallbackCard:
@@ -146,6 +153,73 @@ class Places:
         for judge in self.judges:
             self.heatlist = self.heatlist.union(self.placingcards[judge].places.keys())
 
+    # def OLD_calculate_places(self):
+    #     """
+    #     Updates dataframe of calculation table and couple's placement by judge and overall
+    #     Satisfies Skating System rules
+    #
+    #     :return: True if dataframe could be updated, False otherwise
+    #     """
+    #     n = len(self.placingcards.keys())
+    #     self.overall = None
+    #     if n % 2 == 1 and n > 1:
+    #         # Build dataframe
+    #         place_cols = [[str(i) + "_", "1-" + str(i), "1-" + str(i) + "SUM"] for i in range(1, 11)]
+    #         place_cols = [elmt for sublst in place_cols for elmt in sublst]
+    #         columns = ["Couple"] + self.judges + place_cols + ["Place"]
+    #         self.overall = pd.DataFrame(columns=columns, index=list(range(10)))
+    #
+    #         # Fill couples and judge placements
+    #         heatlist = set()
+    #         for j in self.judges:
+    #             heatlist = heatlist.union(self.placingcards[j].places.keys())
+    #         print(heatlist)
+    #         self.overall["Couple"] = list(heatlist) + [np.NaN] * (10 - len(heatlist))
+    #         for j in self.judges:
+    #             idx = [couple in self.placingcards[j].places.keys() for couple in self.overall["Couple"]]
+    #             self.overall.loc[idx, j] = [self.placingcards[j].places[couple] for couple in self.overall.loc[idx, "Couple"]]
+    #
+    #         # Fill calculation table
+    #         tmp = self.overall[self.judges].apply(pd.Series.value_counts, axis=1)
+    #         self.overall[[str(i) + "_" for i in range(1, tmp.shape[1] + 1)]] = tmp
+    #         self.overall[place_cols] = self.overall[place_cols].fillna(0)
+    #         self.overall["1-1"] = self.overall["1_"]
+    #         self.overall["1-1SUM"] = self.overall["1_"]
+    #         for i in range(2, 11):
+    #             self.overall["1-" + str(i)] = self.overall["1-" + str(i - 1)] + self.overall[str(i) + "_"]
+    #             self.overall["1-" + str(i) + "SUM"] = self.overall["1-" + str(i - 1) + "SUM"] + (self.overall[str(i) + "_"] * i)
+    #
+    #         # Decide placements
+    #         # TODO: ask Matt if we should break ties after first attempt or just award
+    #         i = 1
+    #         while i < 11:
+    #             idxna = pd.isna(self.overall["Place"])
+    #             couples = self.overall.loc[idxna, "Couple"]
+    #             idxp = (self.overall.loc[idxna, "1-" + str(i)] == max(self.overall.loc[idxna, "1-" + str(i)]))
+    #             couples = couples.loc[idxp]
+    #             if couples.shape[0] > 1:
+    #                 idxs = self.overall.loc[idxna].loc[idxp, "1-" + str(i) + "SUM"] == min(
+    #                     self.overall.loc[idxna].loc[idxp, "1-" + str(i) + "SUM"])
+    #                 couples = couples.loc[idxs]
+    #                 # for j in range(i + 1, 11):
+    #                 #     idxtp = self.overall.loc[idxna].loc[idxp, "1-" + str(j)] == max(
+    #                 #         self.overall.loc[idxna].loc[idxp, "1-" + str(j)])
+    #                 #     tmp_couples = couples.loc[idxtp]
+    #                 #     if tmp_couples.shape[0] <= 1:
+    #                 #         couples = tmp_couples
+    #                 #         break
+    #                 #     idxts = self.overall.loc[idxna].loc[idxp, "1-" + str(j) + "SUM"] == min(
+    #                 #         self.overall.loc[idxna].loc[idxp, "1-" + str(j) + "SUM"])
+    #                 #     tmp_couples = couples.loc[idxts]
+    #                 #     if tmp_couples.shape[0] <= 1:
+    #                 #         couples = tmp_couples
+    #                 #         break
+    #             idxf = [couple in couples.values for couple in self.overall["Couple"]]
+    #             n = np.count_nonzero(idxf)
+    #             tmp = [i for _ in range(n)]
+    #             self.overall.loc[idxf, "Place"] = tmp
+    #             i += n if n > 0 else 1
+
     def calculate_places(self):
         """
         Updates dataframe of calculation table and couple's placement by judge and overall
@@ -154,18 +228,21 @@ class Places:
         :return: True if dataframe could be updated, False otherwise
         """
         n = len(self.placingcards.keys())
+        majority = n // 2 + n % 2
+        self.overall = None
         if n % 2 == 1 and n > 1:
-            # Build dataframe
-            place_cols = [[str(i) + "_", "1-" + str(i), "1-" + str(i) + "SUM"] for i in range(1, 11)]
-            place_cols = [elmt for sublst in place_cols for elmt in sublst]
-            columns = ["Couple"] + self.judges + place_cols + ["Place"]
-            self.overall = pd.DataFrame(columns=columns, index=list(range(10)))
-
-            # Fill couples and judge placements
             heatlist = set()
             for j in self.judges:
                 heatlist = heatlist.union(self.placingcards[j].places.keys())
-            self.overall["Couple"] = list(heatlist) + [np.NaN] * (10 - len(heatlist))
+
+            # Build dataframe
+            place_cols = [[str(i) + "_", "1-" + str(i), "1-" + str(i) + "SUM"] for i in range(1, len(heatlist) + 1)]
+            place_cols = [elmt for sublst in place_cols for elmt in sublst]
+            columns = ["Couple"] + self.judges + place_cols + ["Place"]
+            self.overall = pd.DataFrame(columns=columns, index=list(range(len(heatlist))))
+
+            # Fill couples and judge placements
+            self.overall["Couple"] = list(heatlist)
             for j in self.judges:
                 idx = [couple in self.placingcards[j].places.keys() for couple in self.overall["Couple"]]
                 self.overall.loc[idx, j] = [self.placingcards[j].places[couple] for couple in self.overall.loc[idx, "Couple"]]
@@ -176,27 +253,30 @@ class Places:
             self.overall[place_cols] = self.overall[place_cols].fillna(0)
             self.overall["1-1"] = self.overall["1_"]
             self.overall["1-1SUM"] = self.overall["1_"]
-            for i in range(2, 11):
+            for i in range(2, len(heatlist) + 1):
                 self.overall["1-" + str(i)] = self.overall["1-" + str(i - 1)] + self.overall[str(i) + "_"]
                 self.overall["1-" + str(i) + "SUM"] = self.overall["1-" + str(i - 1) + "SUM"] + (self.overall[str(i) + "_"] * i)
 
-            # Decide placements
-            # TODO: ask Matt if we should break ties after first attempt or just award
-            i = 1
-            while i < 11:
-                idxna = pd.isna(self.overall["Place"])
-                couples = self.overall.loc[idxna, "Couple"]
-                idxp = (self.overall.loc[idxna, "1-" + str(i)] == max(self.overall.loc[idxna, "1-" + str(i)]))
-                couples = couples.loc[idxp]
-                if couples.shape[0] > 1:
-                    idxs = self.overall.loc[idxna].loc[idxp, "1-" + str(i) + "SUM"] == min(
-                        self.overall.loc[idxna].loc[idxp, "1-" + str(i) + "SUM"])
-                    couples = couples.loc[idxs]
-                idxf = [couple in couples.values for couple in self.overall["Couple"]]
-                n = np.count_nonzero(idxf)
-                tmp = [i for _ in range(n)]
-                self.overall.loc[idxf, "Place"] = tmp
-                i += n if n > 0 else 1
+            place = 1
+            max_place = len(heatlist)
+            col = 1
+            while np.count_nonzero(pd.isna(self.overall["Place"])) > 0:
+                # print(place, col, "\n", self.overall.loc[pd.isna(self.overall["Place"]) == True])
+                couples = self.overall.loc[pd.isna(self.overall["Place"]) == True]
+                couples = couples.loc[couples["1-" + str(col)] >= majority]
+                if couples.shape[0] == 0:
+                    # print("No majority for", col, "\n", self.overall["1-" + str(col)])
+                    col += 1
+                    continue
+                sort_order = [["1-" + str(i), "1-" + str(i) + "SUM"] for i in range(col, max_place + 1)]
+                sort_order = [elmt for sublst in sort_order for elmt in sublst]
+                asc_order = ["SUM" in name for name in sort_order]
+                couples = couples.sort_values(by=sort_order, ascending=asc_order)
+                for c in couples["Couple"].values:
+                    self.overall.loc[self.overall["Couple"] == c, "Place"] = str(place)
+                    place += 1
+                col = place
+
 
     def return_places(self):
         """
@@ -211,11 +291,9 @@ class Places:
         return self.overall.copy(), self.judges
 
     def clear(self):
-        for judge in self.judges:
-            self.judges.remove(judge)
-            self.placingcards.pop(judge)
-            self.overall = None
-
+        self.judges.clear()
+        self.placingcards.clear()
+        self.overall = None
         self.heatlist = set()
 
 
@@ -262,6 +340,87 @@ class PlacingCard:
         for num in pdict.keys():
             self.places[num] = pdict[num]
 
+class MultiPlaces:
+    def __init__(self):
+        self.indiv_places = dict()
+        self.dances = list()
+        self.overall = None
+        self.heatlist = set()
+
+    def add_places(self, dance, places):
+        if len(self.heatlist) > 0 and len(set(places.keys()).symmetric_difference(self.heatlist)) > 0:
+            return False
+        self.dances.append(dance)
+        self.indiv_places[dance] = places
+        if len(self.heatlist) == 0:
+            self.heatlist = set(places.keys())
+        self.overall = None
+        return True
+
+    def remove_places(self, dance):
+        if dance in self.dances:
+            self.dances.remove(dance)
+            self.indiv_places.pop(dance)
+            if len(self.indiv_places.keys()) == 0:
+                self.heatlist = set()
+            self.overall = None
+
+    def clear(self):
+        self.indiv_places.clear()
+        self.dances.clear()
+        self.heatlist = set()
+        self.overall = None
+
+    def calculate_places(self):
+        if len(self.dances) > 0:
+            n = len(self.heatlist)
+            place_cols = [[str(i) + "_", "1-" + str(i) + "SUM", "1-" + str(i)] for i in range(1, n + 1)]
+            place_cols = [elmt for sublst in place_cols for elmt in sublst]
+            cols = ["Couple"] + self.dances + place_cols + ["Total", "Result"]
+            self.overall = pd.DataFrame(index=range(n), columns=cols)
+            self.overall["Couple"] = list(self.heatlist)
+            for dance in self.dances:
+                self.overall[dance] = [self.indiv_places[dance][couple] for couple in self.overall["Couple"].values]
+            self.overall[[str(i) + "_" for i in range(1, n + 1)]] = self.overall[self.dances].apply(pd.Series.value_counts, axis=1)
+            self.overall[place_cols] = self.overall[place_cols].fillna(0)
+            self.overall["1-1"] = self.overall["1_"]
+            self.overall["1-1SUM"] = self.overall["1_"] * 1
+            for i in range(2, n + 1):
+                self.overall["1-" + str(i)] = self.overall["1-" + str(i - 1)] + self.overall[str(i) + "_"]
+                self.overall["1-" + str(i) + "SUM"] = self.overall["1-" + str(i - 1) + "SUM"] + self.overall[str(i) + "_"] * i
+            self.overall["Total"] = self.overall[self.dances].sum(axis=1)
+
+            self.overall = self.overall.sort_values(by="Total")
+            place = 1
+            while np.count_nonzero(pd.isna(self.overall["Result"])):
+                couples = self.overall.loc[pd.isna(self.overall["Result"]) == True]
+                couples = couples.loc[couples["Total"] == min(couples["Total"])]
+                couples = couples.sort_values(by=["1-" + str(place), "1-" + str(place) + "SUM"], ascending=[False, True])
+                match = couples.duplicated(subset=["1-" + str(place), "1-" + str(place) + "SUM"], keep=False)
+                if match.iloc[0]:
+                    for i in match.index:
+                        if not match.loc[i]:
+                            break
+                        self.overall.loc[i, "Result"] = "R11"
+                        place += 1
+                else:
+                    for c in couples["Couple"].values:
+                        self.overall.loc[self.overall["Couple"] == c, "Result"] = str(place)
+                        place += 1
+                        break
+
+    def return_places(self):
+        """
+        Returns overall places for the judges' placements so far
+
+        :return: dataframe with couples, calculation table, and placement by judge and overall
+        """
+        if self.overall is None:
+            self.calculate_places()
+        if self.overall is None:
+            return None
+        return self.overall.copy(), self.dances
+
 
 if __name__ == "__main__":
     # round = Callbacks()
@@ -283,10 +442,20 @@ if __name__ == "__main__":
     # round.add_places("12", places2)
     # tmp, judges = round.return_places()
 
-    round = Places()
-    round.add_places("10", {"10": 1, "20": 2, "30": 3, "40": 4, "50": 5, "60": 6})
-    round.add_places("11", {"20": 1, "10": 2, "40": 3, "30": 4, "60": 5, "50": 6})
-    round.add_places("12", {"30": 1, "20": 2, "10": 3, "60": 4, "50": 5, "40": 6})
-    round.add_places("13", {"60": 1, "50": 2, "40": 3, "30": 4, "20": 5, "10": 6})
-    round.add_places("14", {"30": 1, "10": 2, "20": 3, "60": 4, "40": 5, "50": 6})
-    print(round.return_places()[0])
+    # round = Places()
+    # round.add_places("10", {"10": 1, "20": 2, "30": 3, "40": 4, "50": 5, "60": 6})
+    # round.add_places("11", {"20": 1, "10": 2, "40": 3, "30": 4, "60": 5, "50": 6})
+    # round.add_places("12", {"30": 1, "20": 2, "10": 3, "60": 4, "50": 5, "40": 6})
+    # round.add_places("13", {"60": 1, "50": 2, "40": 3, "30": 4, "20": 5, "10": 6})
+    # round.add_places("14", {"30": 1, "10": 2, "20": 3, "60": 4, "40": 5, "50": 6})
+    # print(round.return_places()[0].sort_values(by="Place"))
+
+    round = MultiPlaces()
+    # round.add_places("W", {"171": 1, "193": 2, "103": 3, "173": 4, "176": 6, "145": 5, "111": 7})
+    # round.add_places("T", {"171": 2, "193": 1, "103": 3, "173": 4, "176": 5, "145": 6, "111": 7})
+    # round.add_places("F", {"113": 1, "181": 2, "176": 5, "103": 4, "193": 3, "171": 6})
+    # round.add_places("T", {"113": 1, "181": 3, "176": 2, "103": 4, "193": 5, "171": 6})
+    round.add_places("W", {"171": 1, "193": 2, "176": 3, "103": 5, "145": 4, "173": 7, "178": 6})
+    round.add_places("F", {"171": 1, "193": 2, "176": 4, "103": 3, "145": 6, "173": 5, "178": 7})
+    round.calculate_places()
+    print(round.overall)
